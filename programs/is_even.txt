@@ -1,0 +1,7 @@
+// Reports whether an input integer is even or odd.
+let n = num(ask("Enter an integer: "))
+if n % 2 == 0 {
+    print n + " is even."
+} else {
+    print n + " is odd."
+}

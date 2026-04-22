@@ -1,0 +1,3 @@
+// Reads a string and prints it reversed.
+let s = ask("Enter a string: ")
+print reverse(s)

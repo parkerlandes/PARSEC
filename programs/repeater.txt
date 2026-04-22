@@ -1,0 +1,10 @@
+// Prints a given character repeated a given number of times.
+// Example: character '*', count 5  ->  *****
+let ch    = ask("Enter a character: ")
+let times = num(ask("How many times?   "))
+
+let out = ""
+loop times {
+    let out = out + ch
+}
+print out

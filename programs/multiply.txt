@@ -1,0 +1,5 @@
+// Multiplies two single-digit numbers entered by the user.
+// `ask()` returns a string, so we convert it with num() before multiplying.
+let a = num(ask("Enter the first digit: "))
+let b = num(ask("Enter the second digit: "))
+print a * b

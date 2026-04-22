@@ -1,0 +1,4 @@
+// Reads one line of input from the user and echoes it back,
+// the way the Unix `cat` command does for a single line of stdin.
+let line = ask()
+print line

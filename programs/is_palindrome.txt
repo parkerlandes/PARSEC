@@ -1,0 +1,7 @@
+// Reports whether an input string reads the same forwards and backwards.
+let s = ask("Enter a string: ")
+if s == reverse(s) {
+    print s + " is a palindrome."
+} else {
+    print s + " is not a palindrome."
+}

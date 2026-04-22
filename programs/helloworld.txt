@@ -1,0 +1,2 @@
+// Prints a greeting to stdout.
+print "Hello, World!"

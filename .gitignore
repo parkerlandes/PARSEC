@@ -2,3 +2,13 @@
 *.zip
 __pycache__/
 *.pyc
+.vscode/
+
+# Transpiler build artifacts
+transpiler/parsec2c
+transpiler/*.o
+transpiler/parsec.tab.c
+transpiler/parsec.tab.h
+transpiler/lex.yy.c
+transpiler/_out
+transpiler/_out.c

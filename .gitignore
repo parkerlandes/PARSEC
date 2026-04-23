@@ -12,3 +12,10 @@ transpiler/parsec.tab.h
 transpiler/lex.yy.c
 transpiler/_out
 transpiler/_out.c
+
+# Demo/compile outputs (regenerable from source)
+*.ll
+hello
+hello.c
+demo
+demo.c

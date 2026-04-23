@@ -353,6 +353,7 @@ Why these design choices?
 ```
 PARSEC/
 ├── parsec.py                      # interpreter (lexer + parser + evaluator)
+├── parsec_llvm.py                 # LLVM IR compiler (reuses parsec.py front end)
 ├── README.md                      # this file
 ├── programs/
 │   ├── helloworld.txt
@@ -365,7 +366,7 @@ PARSEC/
 └── transpiler/                    # PARSEC → C transpiler (Flex + Bison)
     ├── parsec.l                   # flex lexer
     ├── parsec.y                   # bison grammar with C emission
-    ├── parsec_runtime.h           # runtime declarations
+    ├── parsec_runtime.h           # runtime declarations (shared with LLVM path)
     ├── parsec_runtime.c           # runtime (pv type, arithmetic, I/O, etc.)
     └── Makefile
 ```
@@ -443,3 +444,89 @@ make clean
 ```
 
 Removes generated parser/lexer C, the transpiler binary, and any `_out.c` / `_out` artifacts from `make run`.
+
+---
+
+## LLVM compiler (PARSEC → LLVM IR → native binary)
+
+`parsec_llvm.py` is a compiler that emits **LLVM IR** directly. Unlike the transpiler — which produces C that still needs a C compiler — the LLVM compiler writes IR that `clang` feeds straight into the LLVM optimizer and backend to produce a native object file.
+
+### Requirements
+
+- Python 3.8+ (for running `parsec_llvm.py`; reuses `parsec.py`'s lexer and parser)
+- `clang` (Apple's `clang` is LLVM-based and is preinstalled on macOS)
+- The C runtime from `transpiler/parsec_runtime.{h,c}` — the compiler emits IR that calls the runtime through a small pointer-based wrapper API (`pv_add_p`, `pv_print_p`, …)
+
+### How it works
+
+- `parsec_llvm.py` imports `tokenize` and `Parser` from `parsec.py`. So the front end is shared with the interpreter — same tokens, same grammar, same AST.
+- The `LLVMGen` class walks the AST and emits LLVM IR as text. Every PARSEC value becomes a `%pv` struct (the same tagged union the runtime uses). Every expression is lowered to a stack slot (`alloca %pv`) populated by a call to a runtime wrapper function.
+- All allocas are hoisted to the entry block — standard LLVM practice that lets the `mem2reg` pass promote them to SSA registers later.
+- Control flow (`if`/`loop`/`while`) emits explicit basic blocks with `br` instructions.
+- Strings become private constants (`@.str.N`) pointing into the data section.
+
+### Build and run
+
+```bash
+python3 parsec_llvm.py programs/helloworld.txt > hello.ll
+clang -Wno-override-module hello.ll transpiler/parsec_runtime.c -o hello
+./hello
+```
+
+(The `-Wno-override-module` just silences an informational warning about the host target triple; the compiled program is identical.)
+
+To see the IR first:
+
+```bash
+python3 parsec_llvm.py programs/is_palindrome.txt
+```
+
+### Example generated IR
+
+The PARSEC program:
+
+```parsec
+let x = 5 + 3
+print x
+```
+
+compiles to the following LLVM IR (abbreviated):
+
+```llvm
+%pv = type { i32, double, ptr, i8 }
+
+declare void @pv_num_p(ptr, double)
+declare void @pv_add_p(ptr, ptr, ptr)
+declare void @pv_print_p(ptr)
+declare void @pv_assign(ptr, ptr)
+declare void @pv_nil_p(ptr)
+
+define i32 @main() {
+entry:
+  %var.x = alloca %pv
+  call void @pv_nil_p(ptr %var.x)
+  %t0 = alloca %pv
+  %t1 = alloca %pv
+  %t2 = alloca %pv
+  call void @pv_num_p(ptr %t1, double 5.0)
+  call void @pv_num_p(ptr %t2, double 3.0)
+  call void @pv_add_p(ptr %t0, ptr %t1, ptr %t2)
+  call void @pv_assign(ptr %var.x, ptr %t0)
+  call void @pv_print_p(ptr %var.x)
+  ret i32 0
+}
+```
+
+The IR uses **opaque pointers** (LLVM 15+): every pointer is just `ptr`, regardless of what it points to. The struct type `%pv` is declared once and pointers to it are untyped at the IR level.
+
+### Why two back ends?
+
+| | Transpiler (Extra Credit I) | LLVM compiler (Extra Credit II) |
+|---|---|---|
+| Tool | Flex + Bison | Hand-written Python codegen |
+| Output | C source | LLVM IR |
+| Toolchain to binary | `cc prog.c runtime.c` | `clang prog.ll runtime.c` |
+| Optimizer | whatever cc uses | LLVM's IR optimizer |
+| What's interesting | writing grammar actions that emit C | generating SSA-form IR with explicit basic blocks |
+
+Both share the same `pv` runtime in `transpiler/parsec_runtime.c`, so the two back ends produce identical program behavior.
